@@ -20,10 +20,12 @@ spring:
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
-      group-id: inventory-group
+      group-id: inventory-group-v3
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.order_service.dto,com.inventory_service.dto"
 
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -52,4 +54,3 @@ logging:
   level:
     root: INFO
     com.inventory_service: DEBUG
-

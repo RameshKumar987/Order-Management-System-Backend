@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -16,12 +18,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter implements GlobalFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     private final JwtService jwtService;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
 
         String path = exchange.getRequest().getURI().getPath();
+        log.info("Request path: {}", path);
 
         // auth APIs and OAuth endpoints - permitAll
         if (path.startsWith("/auth/login") ||
@@ -35,17 +39,21 @@ public class JwtAuthenticationFilter implements GlobalFilter {
         String authHeader = exchange.getRequest()
                 .getHeaders()
                 .getFirst(HttpHeaders.AUTHORIZATION);
+        log.info("Authorization header: {}", authHeader);
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            log.warn("Missing or invalid Authorization header");
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
 
         String token = authHeader.substring(7);
+        log.info("Extracted token: {}", token);
 
         try {
             // Validate token
             if (!jwtService.isTokenValid(token)) {
+                log.warn("Token validation failed");
                 exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                 return exchange.getResponse().setComplete();
             }
@@ -54,12 +62,14 @@ public class JwtAuthenticationFilter implements GlobalFilter {
             String username = jwtService.extractUsername(token);
             String role = jwtService.extractRole(token);
             List<String> scopes = jwtService.extractScopes(token);
+            Long userId = jwtService.extractUserId(token);
 
             // Add user info to request headers for downstream services
             exchange.getRequest().mutate()
                     .header("X-User-Email", username)
                     .header("X-User-Role", role)
                     .header("X-User-Scopes", String.join(",", scopes))
+                    .header("X-User-Id", String.valueOf(userId))
                     .build();
 
             // Validate scopes for specific endpoints
@@ -68,7 +78,9 @@ public class JwtAuthenticationFilter implements GlobalFilter {
                 return exchange.getResponse().setComplete();
             }
 
-        } catch (Exception e) {
+
+        } catch (Throwable t) {
+            log.error("Error during JWT authentication", t);
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
@@ -85,4 +97,3 @@ public class JwtAuthenticationFilter implements GlobalFilter {
         );
     }
 }
-

@@ -1,4 +1,8 @@
 package com.order_service.dto;
 
-public record CreateOrderRequest() {
-}
+import java.util.List;
+
+public record CreateOrderRequest(
+        List<OrderItemRequest> items
+
+) {}

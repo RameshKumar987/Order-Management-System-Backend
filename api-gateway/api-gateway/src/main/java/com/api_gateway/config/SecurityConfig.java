@@ -36,6 +36,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .pathMatchers("/auth/admin/**").hasRole("ADMIN")
                         .pathMatchers("/inventory/**").authenticated() // Allow any authenticated user
+                        .pathMatchers("/orders/**").authenticated() // Allow any authenticated user
                         .anyExchange().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
