@@ -1,17 +1,23 @@
 package com.inventory_service.service;
 
 import com.inventory_service.dto.CreateProductRequest;
+import com.inventory_service.dto.OrderDto;
+import com.inventory_service.dto.OrderItemDto;
 import com.inventory_service.entity.Category;
+import com.inventory_service.entity.Inventory;
 import com.inventory_service.entity.Product;
 import com.inventory_service.exception.ResourceNotFoundException;
 import com.inventory_service.exception.ValidationException;
 import com.inventory_service.repository.CategoryRepository;
+import com.inventory_service.repository.InventoryRepository;
 import com.inventory_service.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.kafka.core.KafkaTemplate;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +26,8 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final InventoryRepository inventoryRepository;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     /**
      * Validate product ID
@@ -154,5 +162,99 @@ public class ProductService {
 
         productRepository.deleteById(id);
         log.info("Product deleted successfully with id: {}", id);
+    }
+
+    public void processOrder(OrderDto order) {
+        log.info("📦 Processing order: Order ID = {}, Items count = {}", order.id(), order.items().size());
+
+        try {
+            // 1. Validate all products exist before processing
+            for (OrderItemDto item : order.items()) {
+                if (!productRepository.existsById(item.productId())) {
+                    String errorMsg = String.format("Product not found with ID: %d", item.productId());
+                    log.warn("⚠️  {}", errorMsg);
+                    publishValidationFailure(order.id(), errorMsg);
+                    return;
+                }
+            }
+
+            // 2. Validate stock availability for all items
+            for (OrderItemDto item : order.items()) {
+                Inventory inventory = inventoryRepository.findById(item.productId())
+                        .orElse(null);
+
+                if (inventory == null) {
+                    String errorMsg = String.format("Inventory not found for product ID: %d", item.productId());
+                    log.warn("⚠️  {}", errorMsg);
+                    publishValidationFailure(order.id(), errorMsg);
+                    return;
+                }
+
+                if (inventory.getAvailableStock() < item.quantity()) {
+                    String errorMsg = String.format(
+                        "Insufficient stock for product %d. Available: %d, Requested: %d",
+                        item.productId(), inventory.getAvailableStock(), item.quantity());
+                    log.warn("⚠️  {}", errorMsg);
+                    publishValidationFailure(order.id(), errorMsg);
+                    return;
+                }
+            }
+
+            // 3. Calculate total amount
+            double totalAmount = order.items().stream()
+                    .mapToDouble(item -> {
+                        Product product = productRepository.findById(item.productId()).orElse(null);
+                        if (product == null) {
+                            throw new RuntimeException("Product not found: " + item.productId());
+                        }
+                        double itemTotal = product.getPrice() * item.quantity();
+                        log.debug("Item: Product ID = {}, Quantity = {}, Price = {}, Total = {}",
+                                item.productId(), item.quantity(), product.getPrice(), itemTotal);
+                        return itemTotal;
+                    })
+                    .sum();
+
+            log.info("✅ Order validation complete: Order ID = {}, Total Amount = {}", order.id(), totalAmount);
+
+            // 4. Reserve stock for all items
+            for (OrderItemDto item : order.items()) {
+                Inventory inventory = inventoryRepository.findById(item.productId()).orElseThrow();
+                inventory.setAvailableStock(inventory.getAvailableStock() - item.quantity());
+                inventory.setReservedStock(inventory.getReservedStock() + item.quantity());
+                inventoryRepository.save(inventory);
+                log.info("✅ Stock reserved: Order ID = {}, Product ID = {}, Quantity = {}",
+                        order.id(), item.productId(), item.quantity());
+            }
+
+            // 5. Publish validation success result
+            publishValidationSuccess(order.id(), totalAmount);
+            log.info("✅ Order validated successfully: Order ID = {}", order.id());
+
+        } catch (Exception e) {
+            String errorMsg = "Order processing failed: " + e.getMessage();
+            log.error("❌ {}", errorMsg);
+            publishValidationFailure(order.id(), errorMsg);
+        }
+    }
+
+    private void publishValidationSuccess(Long orderId, Double totalAmount) {
+        Map<String, Object> validationResult = Map.of(
+                "orderId", orderId,
+                "totalAmount", totalAmount,
+                "status", "VALIDATED"
+        );
+        kafkaTemplate.send("order-validation-topic", validationResult);
+        log.info("✅ Validation success published for Order ID: {}", orderId);
+    }
+
+    private void publishValidationFailure(Long orderId, String errorMessage) {
+        Map<String, Object> failureResult = Map.of(
+                "orderId", orderId,
+                "totalAmount", 0.0,
+                "status", "FAILED",
+                "error", errorMessage
+        );
+        kafkaTemplate.send("order-validation-topic", failureResult);
+        log.warn("⚠️  Validation failure published for Order ID: {}, Error: {}", orderId, errorMessage);
     }
 }
