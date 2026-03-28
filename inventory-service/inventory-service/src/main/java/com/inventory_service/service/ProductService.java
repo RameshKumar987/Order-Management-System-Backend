@@ -15,9 +15,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.kafka.core.KafkaTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +30,7 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final InventoryRepository inventoryRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * Validate product ID
@@ -238,23 +241,33 @@ public class ProductService {
     }
 
     private void publishValidationSuccess(Long orderId, Double totalAmount) {
-        Map<String, Object> validationResult = Map.of(
-                "orderId", orderId,
-                "totalAmount", totalAmount,
-                "status", "VALIDATED"
-        );
-        kafkaTemplate.send("order-validation-topic", validationResult);
-        log.info("✅ Validation success published for Order ID: {}", orderId);
+        try {
+            Map<String, Object> validationResult = new HashMap<>();
+            validationResult.put("orderId", orderId);
+            validationResult.put("totalAmount", totalAmount);
+            validationResult.put("status", "VALIDATED");
+
+            String json = objectMapper.writeValueAsString(validationResult);
+            kafkaTemplate.send("inventory-events", json);
+            log.info("✅ Validation success published for Order ID: {}", orderId);
+        } catch (Exception e) {
+            log.error("❌ Error publishing validation success: {}", e.getMessage());
+        }
     }
 
     private void publishValidationFailure(Long orderId, String errorMessage) {
-        Map<String, Object> failureResult = Map.of(
-                "orderId", orderId,
-                "totalAmount", 0.0,
-                "status", "FAILED",
-                "error", errorMessage
-        );
-        kafkaTemplate.send("order-validation-topic", failureResult);
-        log.warn("⚠️  Validation failure published for Order ID: {}, Error: {}", orderId, errorMessage);
+        try {
+            Map<String, Object> failureResult = new HashMap<>();
+            failureResult.put("orderId", orderId);
+            failureResult.put("totalAmount", 0.0);
+            failureResult.put("status", "FAILED");
+            failureResult.put("error", errorMessage);
+
+            String json = objectMapper.writeValueAsString(failureResult);
+            kafkaTemplate.send("inventory-events", json);
+            log.warn("⚠️  Validation failure published for Order ID: {}, Error: {}", orderId, errorMessage);
+        } catch (Exception e) {
+            log.error("❌ Error publishing validation failure: {}", e.getMessage());
+        }
     }
 }

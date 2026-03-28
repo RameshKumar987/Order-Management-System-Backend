@@ -1,53 +1,21 @@
-
 package com.order_service.kafka;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.order_service.service.OrderService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.stereotype.Service;
-
-import java.util.Map;
-
-@Service
-@RequiredArgsConstructor
-@Slf4j
+/**
+ * ⚠️ DEPRECATED - This class has been moved to PaymentEventConsumer.java
+ *
+ * This file is kept for reference only and should be deleted.
+ * The PaymentEventConsumer class now handles payment event processing for the Saga pattern.
+ *
+ * MIGRATION DETAILS:
+ * - Old class: ValidationConsumer (listened to old validation topic)
+ * - New class: PaymentEventConsumer (listens to payment-events topic)
+ * - Location: PaymentEventConsumer.java (same package)
+ *
+ * Spring will automatically pick up the PaymentEventConsumer bean.
+ * This file can be safely deleted.
+ */
+@Deprecated(since = "1.0", forRemoval = true)
 public class ValidationConsumer {
-
-    private final OrderService orderService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    @KafkaListener(topics = "order-validation-topic", groupId = "order-group")
-    public void consumeValidationResult(String message) {
-        try {
-            log.info("📨 Received validation message from Kafka: {}", message);
-
-            Map<String, Object> validationResult = objectMapper.readValue(message, Map.class);
-
-            Long orderId = ((Number) validationResult.get("orderId")).longValue();
-            String status = (String) validationResult.get("status");
-
-            log.info("✅ Parsed validation result: Order ID = {}, Status = {}", orderId, status);
-
-            if ("FAILED".equals(status)) {
-                String error = (String) validationResult.get("error");
-                log.warn("⚠️  Order validation FAILED for Order ID: {}, Reason: {}", orderId, error);
-            }
-
-            orderService.updateOrderFromValidation(validationResult);
-
-            if ("VALIDATED".equals(status)) {
-                log.info("✅ Order updated successfully from validation: Order ID = {}", orderId);
-            } else if ("FAILED".equals(status)) {
-                log.warn("⚠️  Order marked as FAILED: Order ID = {}", orderId);
-            }
-
-        } catch (ClassCastException | NullPointerException e) {
-            log.error("❌ Type conversion error while parsing Kafka message: {}", e.getMessage());
-        } catch (Exception e) {
-            log.error("❌ Error processing validation message from Kafka: {}", e.getMessage());
-        }
-    }
+    // This class is deprecated and has been replaced by PaymentEventConsumer.java
 }
 

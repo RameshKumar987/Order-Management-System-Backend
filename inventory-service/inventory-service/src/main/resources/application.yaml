@@ -23,13 +23,11 @@ spring:
       group-id: inventory-group-v3
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "com.order_service.dto,com.inventory_service.dto"
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
   security:
     oauth2:
