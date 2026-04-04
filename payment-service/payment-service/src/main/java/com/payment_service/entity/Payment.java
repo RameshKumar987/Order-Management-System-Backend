@@ -18,7 +18,7 @@ public class Payment {
     private Long id;
 
     private Long orderId;
-
+    private Long userId;
     private Double amount;
 
     @Enumerated(EnumType.STRING)

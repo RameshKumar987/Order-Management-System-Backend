@@ -13,12 +13,6 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true, securedEnabled = true, jsr250Enabled = true)
 public class SecurityConfig {
-    private final JwtAuthConverter jwtAuthConverter;
-
-    public SecurityConfig(JwtAuthConverter jwtAuthConverter) {
-        this.jwtAuthConverter = jwtAuthConverter;
-    }
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
@@ -26,17 +20,13 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(org.springframework.security.config.Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/orders/**").hasRole("CUSTOMER")
+                        // API Gateway handles all authentication - permit all here
                         .anyRequest().permitAll()
-                )
-                .oauth2ResourceServer(oauth -> oauth
-                        .jwt(jwt -> {
-                            jwt.jwtAuthenticationConverter(jwtAuthConverter.jwtAuthenticationConverter());
-                        })
                 );
 
         return http.build();
     }
+
 
     @Bean
     public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {

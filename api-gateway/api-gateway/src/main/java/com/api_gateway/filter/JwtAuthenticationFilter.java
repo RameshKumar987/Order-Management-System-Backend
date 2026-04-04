@@ -64,29 +64,36 @@ public class JwtAuthenticationFilter implements GlobalFilter {
             List<String> scopes = jwtService.extractScopes(token);
             Long userId = jwtService.extractUserId(token);
 
-            // Add user info to request headers for downstream services
-            exchange.getRequest().mutate()
-                    .header("X-User-Email", username)
-                    .header("X-User-Role", role)
-                    .header("X-User-Scopes", String.join(",", scopes))
-                    .header("X-User-Id", String.valueOf(userId))
-                    .build();
-
             // Validate scopes for specific endpoints
             if (path.startsWith("/inventory") && !hasInventoryScope(scopes)) {
+                log.warn("🚫 Access denied for path {} - missing inventory scope", path);
                 exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
                 return exchange.getResponse().setComplete();
             }
 
+            // Create a mutated exchange with the user headers
+            ServerWebExchange mutatedExchange = exchange.mutate()
+                    .request(r -> r
+                            .header("X-User-Email", username)
+                            .header("X-User-Role", role)
+                            .header("X-User-Scopes", String.join(",", scopes))
+                            .header("X-User-Id", String.valueOf(userId))
+                    ).build();
+
+
+            log.info("✅ Mutated request with headers: X-User-Id={}, X-User-Role={}", userId, role);
+
+            // Pass the mutated exchange to the chain
+            return chain.filter(mutatedExchange);
+
 
         } catch (Throwable t) {
-            log.error("Error during JWT authentication", t);
+            log.error("❌ Error during JWT authentication", t);
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
-
-        return chain.filter(exchange);
     }
+
 
     private boolean hasInventoryScope(List<String> scopes) {
         return scopes != null && (

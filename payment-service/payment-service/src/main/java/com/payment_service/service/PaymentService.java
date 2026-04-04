@@ -11,6 +11,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import com.payment_service.dto.RazorpayOrderResponse;
+import com.razorpay.Order;
+import com.razorpay.RazorpayClient;
+import com.razorpay.Utils;
+import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Value;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -22,6 +28,13 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
+    private final RazorpayClient razorpayClient;
+
+    @Value("${razorpay.key}")
+    private String razorpayKeyId;
+
+    @Value("${razorpay.secret}")
+    private String razorpaySecret;
 
     // ✅ CREATE PAYMENT
     public ApiResponse createPayment(CreatePaymentRequest request) {
@@ -32,6 +45,7 @@ public class PaymentService {
 
         Payment payment = Payment.builder()
                 .orderId(request.orderId())
+                .userId(request.userId())
                 .amount(request.amount())
                 .method(request.method())
                 .status(PaymentStatus.INITIATED)
@@ -40,7 +54,7 @@ public class PaymentService {
 
         paymentRepository.save(payment);
 
-        log.info("✅ Payment created for order: {}", request.orderId());
+        log.info("✅ Payment created for order: {} by user: {}", request.orderId(), request.userId());
 
         return ApiResponse.builder()
                 .success(true)
@@ -50,7 +64,7 @@ public class PaymentService {
     }
 
     // ✅ SUCCESS
-    public ApiResponse completePayment(Long orderId) {
+    public ApiResponse completePayment(Long orderId, String rzpPaymentId) {
 
         Payment payment = getPaymentEntity(orderId);
 
@@ -63,7 +77,7 @@ public class PaymentService {
         }
 
         payment.setStatus(PaymentStatus.SUCCESS);
-        payment.setPaymentId(UUID.randomUUID().toString());
+        payment.setPaymentId(rzpPaymentId != null ? rzpPaymentId : UUID.randomUUID().toString());
 
         paymentRepository.save(payment);
 
@@ -118,12 +132,12 @@ public class PaymentService {
     }
 
     // 📜 HISTORY
-    public ApiResponse getAllPayments() {
+    public ApiResponse getAllPayments(Long userId) {
 
         return ApiResponse.builder()
                 .success(true)
-                .message("All payments fetched")
-                .data(paymentRepository.findAll())
+                .message("User payments fetched")
+                .data(paymentRepository.findByUserId(userId))
                 .build();
     }
 
@@ -149,7 +163,7 @@ public class PaymentService {
     }
 
     // 🔁 AUTO CREATE (Inventory → Payment)
-    public void autoCreatePayment(Long orderId, Double amount) {
+    public void autoCreatePayment(Long orderId, Long userId, Double amount) {
 
         if (paymentRepository.findByOrderId(orderId).isPresent()) {
             log.warn("⚠️ Payment already exists for order: {}", orderId);
@@ -158,6 +172,7 @@ public class PaymentService {
 
         Payment payment = Payment.builder()
                 .orderId(orderId)
+                .userId(userId)
                 .amount(amount)
                 .status(PaymentStatus.INITIATED)
                 .createdAt(LocalDateTime.now())
@@ -165,7 +180,71 @@ public class PaymentService {
 
         paymentRepository.save(payment);
 
-        log.info("🔥 Auto payment created for order: {}", orderId);
+        log.info("🔥 Auto payment created for order: {} for user: {}", orderId, userId);
+    }
+
+    // 💳 RAZORPAY ORDER CREATE
+    public ApiResponse createRazorpayOrder(Long orderId) {
+        try {
+            Payment payment = getPaymentEntity(orderId);
+
+            JSONObject orderRequest = new JSONObject();
+            orderRequest.put("amount", (int) (payment.getAmount() * 100)); // Amount in paise
+            orderRequest.put("currency", "INR");
+            orderRequest.put("receipt", "receipt_" + orderId);
+
+            Order rzpOrder = razorpayClient.orders.create(orderRequest);
+
+            // Temporarily store Razorpay Order ID as paymentId
+            payment.setPaymentId(rzpOrder.get("id")); 
+            paymentRepository.save(payment);
+
+            RazorpayOrderResponse response = RazorpayOrderResponse.builder()
+                    .rzpOrderId(rzpOrder.get("id"))
+                    .amount(payment.getAmount())
+                    .currency("INR")
+                    .keyId(razorpayKeyId)
+                    .orderId(orderId)
+                    .build();
+
+            return ApiResponse.builder()
+                    .success(true)
+                    .message("Razorpay order created")
+                    .data(response)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error creating Razorpay order: {}", e.getMessage());
+            throw new RuntimeException("Razorpay Order Creation Failed: " + e.getMessage());
+        }
+    }
+
+    // 💳 RAZORPAY VERIFY
+    public ApiResponse verifyRazorpayPayment(Map<String, String> data) {
+        try {
+            String rzpOrderId = data.get("razorpay_order_id");
+            String rzpPaymentId = data.get("razorpay_payment_id");
+            String rzpSignature = data.get("razorpay_signature");
+            Long orderId = Long.valueOf(data.get("orderId"));
+
+            JSONObject options = new JSONObject();
+            options.put("razorpay_order_id", rzpOrderId);
+            options.put("razorpay_payment_id", rzpPaymentId);
+            options.put("razorpay_signature", rzpSignature);
+
+            boolean isValid = Utils.verifyPaymentSignature(options, razorpaySecret);
+            
+            if (isValid) {
+                return completePayment(orderId, rzpPaymentId);
+            } else {
+                log.warn("❌ Razorpay signature invalid for order: {}", orderId);
+                return failPayment(orderId);
+            }
+
+        } catch (Exception e) {
+            log.error("Payment verification failed: {}", e.getMessage());
+            return failPayment(Long.valueOf(data.get("orderId")));
+        }
     }
 
     // 🔥 PRIVATE METHOD

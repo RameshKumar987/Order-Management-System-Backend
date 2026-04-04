@@ -9,6 +9,9 @@ public record CreatePaymentRequest(
         @NotNull(message = "OrderId is required")
         Long orderId,
 
+        @NotNull(message = "UserId is required")
+        Long userId,
+
         @NotNull(message = "Amount is required")
         @Positive(message = "Amount must be positive")
         Double amount,

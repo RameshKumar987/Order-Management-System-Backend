@@ -49,7 +49,10 @@ public class SecurityConfig {
                         .anyExchange().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtDecoder(reactiveJwtDecoder()))
+                        .jwt(jwt -> jwt
+                                .jwtDecoder(reactiveJwtDecoder())
+                                .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                        )
                 );
 
         return http.build();
@@ -94,12 +97,15 @@ public class SecurityConfig {
 
     @Bean
     public ReactiveJwtDecoder reactiveJwtDecoder() {
-        // Create a SecretKey from the JWT secret for symmetric key validation
+        // Auth service signs with JJWT Keys.hmacShaKeyFor() which uses HS256 for secrets < 512 bits.
+        // We use MacAlgorithm.HS256 here to match that signing algorithm.
         byte[] secretBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
-        SecretKey secretKey = new SecretKeySpec(secretBytes, 0, secretBytes.length, "HmacSHA512");
+        SecretKey secretKey = new SecretKeySpec(secretBytes, 0, secretBytes.length, "HmacSHA256");
 
-        // Create ReactiveJwtDecoder with the secret key
-        return NimbusReactiveJwtDecoder.withSecretKey(secretKey).build();
+        return NimbusReactiveJwtDecoder
+                .withSecretKey(secretKey)
+                .macAlgorithm(org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS256)
+                .build();
     }
 }
 

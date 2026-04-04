@@ -18,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -52,6 +51,7 @@ public class OrderService {
         List<OrderItem> items = request.items().stream()
                 .map(i -> OrderItem.builder()
                         .productId(i.productId())
+                        .productName(i.productName())
                         .quantity(i.quantity())
                         .price(0.0)
                         .order(order)
@@ -66,7 +66,7 @@ public class OrderService {
 
         // Publish order event for inventory validation
         List<OrderItemDto> itemDtos = savedOrder.getItems().stream()
-                .map(item -> new OrderItemDto(item.getProductId(), item.getQuantity(), item.getPrice()))
+                .map(item -> new OrderItemDto(item.getProductId(), item.getProductName(), item.getQuantity(), item.getPrice()))
                 .toList();
         OrderDto orderDto = new OrderDto(
                 savedOrder.getId(),
@@ -92,7 +92,7 @@ public class OrderService {
         try {
             Order order = getOrderById(orderId);
 
-            if (order.getStatus() != OrderStatus.PENDING) {
+            if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.PAYMENT_PENDING) {
                 log.warn("⚠️  Cannot confirm order with status: {}", order.getStatus());
                 return;
             }
@@ -126,9 +126,16 @@ public class OrderService {
         }
 
         order.setStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
+        Order saved = orderRepository.save(order);
 
-        saveHistory(order);
+        saveHistory(saved);
+
+        // Notify inventory to release stock
+        List<OrderItemDto> itemDtos = saved.getItems().stream()
+                .map(item -> new OrderItemDto(item.getProductId(), item.getProductName(), item.getQuantity(), item.getPrice()))
+                .toList();
+        OrderDto orderDto = new OrderDto(saved.getId(), saved.getUserId(), saved.getStatus().name(), itemDtos);
+        orderProducer.publishOrderCancelled(orderDto);
 
         return "Order cancelled successfully";
     }

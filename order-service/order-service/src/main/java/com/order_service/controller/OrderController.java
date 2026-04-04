@@ -10,8 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 
 import org.springframework.web.bind.annotation.*;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
+
 
 import java.util.Map;
 
@@ -27,12 +26,9 @@ public class OrderController {
     @PostMapping
     public ResponseEntity<?> createOrder(
             @RequestBody CreateOrderRequest request,
-            Authentication auth
+            @RequestHeader("X-User-Id") Long userId
     ){
         log.info("📦 Order creation request: {}", request);
-
-        Jwt jwt = (Jwt) auth.getPrincipal();
-        Long userId = jwt.getClaim("userId");
         log.info("Creating order for userId: {}", userId);
 
         try {
@@ -53,10 +49,7 @@ public class OrderController {
     }
 
     @GetMapping("/my-orders")
-    public ResponseEntity<?> myOrders(Authentication auth){
-
-        Jwt jwt = (Jwt) auth.getPrincipal();
-        Long userId = jwt.getClaim("userId");
+    public ResponseEntity<?> myOrders(@RequestHeader("X-User-Id") Long userId){
 
         log.info("myOrders request for userId: {}",userId);
 
@@ -66,7 +59,7 @@ public class OrderController {
         var orderDtos = orders.stream()
                 .map(order -> {
                     var itemDtos = order.getItems().stream()
-                            .map(item -> new OrderItemDto(item.getProductId(), item.getQuantity(), item.getPrice()))
+                            .map(item -> new OrderItemDto(item.getProductId(), item.getProductName(), item.getQuantity(), item.getPrice()))
                             .toList();
                     return new OrderDto(
                             order.getId(),
@@ -88,7 +81,7 @@ public class OrderController {
         var orderDtos = orders.stream()
                 .map(order -> {
                     var itemDtos = order.getItems().stream()
-                            .map(item -> new OrderItemDto(item.getProductId(), item.getQuantity(), item.getPrice()))
+                            .map(item -> new OrderItemDto(item.getProductId(), item.getProductName(), item.getQuantity(), item.getPrice()))
                             .toList();
                     return new OrderDto(
                             order.getId(),
@@ -108,7 +101,7 @@ public class OrderController {
 
         // Convert Entity to DTO to avoid circular reference in JSON serialization
         var itemDtos = order.getItems().stream()
-                .map(item -> new OrderItemDto(item.getProductId(), item.getQuantity(), item.getPrice()))
+                .map(item -> new OrderItemDto(item.getProductId(), item.getProductName(), item.getQuantity(), item.getPrice()))
                 .toList();
 
         var orderDto = new OrderDto(

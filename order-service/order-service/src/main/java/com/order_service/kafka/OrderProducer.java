@@ -21,9 +21,30 @@ public class OrderProducer {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public void publishOrderCreated(OrderDto orderDto){
+        publishOrderEvent(orderDto, "order-events");
+    }
+
+    public void publishOrderCancelled(OrderDto orderDto){
+        publishOrderEvent(orderDto, "order-events");
+        
+        // Also publish to compensation for safety
         try {
-            log.info("📤 Publishing order event to Kafka: Order ID = {}, Items count = {}",
-                    orderDto.id(), orderDto.items() != null ? orderDto.items().size() : 0);
+            Map<String, Object> compensationEvent = new HashMap<>();
+            compensationEvent.put("orderId", orderDto.id());
+            compensationEvent.put("action", "RELEASE_STOCK");
+            compensationEvent.put("items", orderDto.items());
+            String json = objectMapper.writeValueAsString(compensationEvent);
+            kafkaTemplate.send("inventory-compensation", json);
+            log.info("🔄 Compensation event published for Order ID: {}", orderDto.id());
+        } catch (Exception e) {
+            log.error("❌ Error publishing compensation event: {}", e.getMessage());
+        }
+    }
+
+    private void publishOrderEvent(OrderDto orderDto, String topic) {
+        try {
+            log.info("📤 Publishing order event to Kafka topic {}: Order ID = {}, Status = {}",
+                    topic, orderDto.id(), orderDto.status());
 
             Map<String, Object> event = new HashMap<>();
             event.put("orderId", orderDto.id());
@@ -32,9 +53,9 @@ public class OrderProducer {
             event.put("items", orderDto.items());
 
             String json = objectMapper.writeValueAsString(event);
-            kafkaTemplate.send("order-events", json);
+            kafkaTemplate.send(topic, json);
 
-            log.info("✅ Order event published successfully to order-events topic: Order ID = {}", orderDto.id());
+            log.info("✅ Order event published successfully to {}: Order ID = {}", topic, orderDto.id());
         } catch (Exception e) {
             log.error("❌ Error publishing order event to Kafka: Order ID = {}, Error: {}",
                     orderDto.id(), e.getMessage(), e);

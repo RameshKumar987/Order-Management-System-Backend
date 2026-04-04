@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/payments")
 @RequiredArgsConstructor
@@ -33,7 +35,7 @@ public class PaymentController {
 
         log.info("💰 Payment success API hit for order: {}", orderId);
 
-        return ResponseEntity.ok(paymentService.completePayment(orderId));
+        return ResponseEntity.ok(paymentService.completePayment(orderId, null));
     }
 
     // ❌ FAIL
@@ -54,10 +56,13 @@ public class PaymentController {
 
     // 📜 HISTORY
     @GetMapping("/history")
-    public ResponseEntity<ApiResponse> getAllPayments() {
+    public ResponseEntity<ApiResponse> getAllPayments(
+            @RequestHeader("X-User-Id") Long userId) {
 
-        return ResponseEntity.ok(paymentService.getAllPayments());
+        log.info("📜 Fetching payment history for userId: {}", userId);
+        return ResponseEntity.ok(paymentService.getAllPayments(userId));
     }
+
 
     // 💸 REFUND
     @PostMapping("/refund/{orderId}")
@@ -66,5 +71,18 @@ public class PaymentController {
         log.info("💸 Refund API hit for order: {}", orderId);
 
         return ResponseEntity.ok(paymentService.refund(orderId));
+    }
+
+    // 💳 RAZORPAY
+    @PostMapping("/razorpay/create-order/{orderId}")
+    public ResponseEntity<ApiResponse> createRzpOrder(@PathVariable Long orderId) {
+        log.info("💳 Creating Razorpay order for OMS order: {}", orderId);
+        return ResponseEntity.ok(paymentService.createRazorpayOrder(orderId));
+    }
+
+    @PostMapping("/razorpay/verify")
+    public ResponseEntity<ApiResponse> verifyRzpOrder(@RequestBody Map<String, String> data) {
+        log.info("💳 Verifying Razorpay payment: {}", data);
+        return ResponseEntity.ok(paymentService.verifyRazorpayPayment(data));
     }
 }

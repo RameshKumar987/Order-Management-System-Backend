@@ -26,11 +26,12 @@ public class InventoryConsumer {
             Map<String, Object> event = mapper.readValue(message, Map.class);
 
             Long orderId = Long.valueOf(event.get("orderId").toString());
+            Long userId = Long.valueOf(event.get("userId").toString());
             String status = event.get("status").toString();
             Double amount = Double.valueOf(event.get("totalAmount").toString());
 
             if (status.equals("VALIDATED")) {
-                paymentService.autoCreatePayment(orderId, amount);
+                paymentService.autoCreatePayment(orderId, userId, amount);
             }
 
         } catch (Exception e) {

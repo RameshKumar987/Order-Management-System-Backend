@@ -20,16 +20,10 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(org.springframework.security.config.Customizer.withDefaults())
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/actuator/**").permitAll()
-                        .requestMatchers("/inventory/categories").authenticated() // Allow any authenticated user
-                        .requestMatchers("/inventory/products").authenticated()   // Allow any authenticated user
-                        .anyRequest().authenticated()
-                )
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> {
-                            // JWT validation happens automatically via the JwtDecoder bean
-                        })
+                        // API Gateway handles all authentication - permit all here
+                        .anyRequest().permitAll()
                 );
+
 
         return http.build();
     }
