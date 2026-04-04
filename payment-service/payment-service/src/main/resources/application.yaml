@@ -1,6 +1,11 @@
 server:
   port: 8084
 
+razorpay:
+  key: rzp_test_SWX9xsii8mFhwM
+  secret: O6CxKV8llWTTvEhyW2zWvhOI
+  webhook-secret: YOUR_WEBHOOK_SECRET
+
 spring:
   application:
     name: payment-service

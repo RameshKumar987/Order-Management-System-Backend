@@ -1,8 +1,8 @@
 package com.payment_service.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.payment_service.dto.ApiResponse;
 import com.payment_service.dto.CreatePaymentRequest;
-import com.payment_service.dto.PaymentResponse;
 import com.payment_service.entity.Payment;
 import com.payment_service.entity.PaymentStatus;
 import com.payment_service.repository.PaymentRepository;
@@ -12,9 +12,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -22,10 +20,15 @@ import java.util.UUID;
 public class PaymentService {
 
     private final PaymentRepository paymentRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectMapper objectMapper;
 
-    // 1️⃣ Create Payment
-    public PaymentResponse createPayment(CreatePaymentRequest request) {
+    // ✅ CREATE PAYMENT
+    public ApiResponse createPayment(CreatePaymentRequest request) {
+
+        if (paymentRepository.findByOrderId(request.orderId()).isPresent()) {
+            throw new RuntimeException("Payment already exists for this order");
+        }
 
         Payment payment = Payment.builder()
                 .orderId(request.orderId())
@@ -37,87 +40,121 @@ public class PaymentService {
 
         paymentRepository.save(payment);
 
-        return new PaymentResponse(
-                payment.getId(),
-                payment.getOrderId(),
-                payment.getAmount(),
-                payment.getStatus().name(),
-                "Payment initiated"
-        );
+        log.info("✅ Payment created for order: {}", request.orderId());
+
+        return ApiResponse.builder()
+                .success(true)
+                .message("Payment initiated successfully")
+                .data(payment)
+                .build();
     }
 
-    // 2️⃣ Simulate Payment Success
-    public PaymentResponse completePayment(Long orderId) {
+    // ✅ SUCCESS
+    public ApiResponse completePayment(Long orderId) {
 
-        Payment payment = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new RuntimeException("Payment not found"));
+        Payment payment = getPaymentEntity(orderId);
+
+        if (payment.getStatus() == PaymentStatus.SUCCESS) {
+            return ApiResponse.builder()
+                    .success(true)
+                    .message("Payment already completed")
+                    .data(payment)
+                    .build();
+        }
 
         payment.setStatus(PaymentStatus.SUCCESS);
         payment.setPaymentId(UUID.randomUUID().toString());
 
         paymentRepository.save(payment);
 
-        // Kafka Event
-        Map<String, Object> event = new HashMap<>();
-        event.put("orderId", orderId);
-        event.put("status", "PAYMENT_SUCCESS");
+        sendKafkaEvent(orderId, "PAYMENT_SUCCESS");
 
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            String json = mapper.writeValueAsString(event);
-            kafkaTemplate.send("payment-events", json);
-        } catch (Exception e) {
-            log.error("Error sending Kafka event: {}", e.getMessage());
-        }
+        log.info("💰 Payment SUCCESS for order: {}", orderId);
 
-        return new PaymentResponse(
-                payment.getId(),
-                payment.getOrderId(),
-                payment.getAmount(),
-                payment.getStatus().name(),
-                "Payment successful"
-        );
+        return ApiResponse.builder()
+                .success(true)
+                .message("Payment completed successfully")
+                .data(payment)
+                .build();
     }
 
-    // 3️⃣ Fail Payment
-    public PaymentResponse failPayment(Long orderId) {
+    // ❌ FAILURE
+    public ApiResponse failPayment(Long orderId) {
 
-        Payment payment = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new RuntimeException("Payment not found"));
+        Payment payment = getPaymentEntity(orderId);
+
+        if (payment.getStatus() == PaymentStatus.FAILED) {
+            return ApiResponse.builder()
+                    .success(false)
+                    .message("Payment already failed")
+                    .data(payment)
+                    .build();
+        }
 
         payment.setStatus(PaymentStatus.FAILED);
         paymentRepository.save(payment);
 
-        // Kafka Event
-        Map<String, Object> event = new HashMap<>();
-        event.put("orderId", orderId);
-        event.put("status", "PAYMENT_FAILED");
+        sendKafkaEvent(orderId, "PAYMENT_FAILED");
 
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            String json = mapper.writeValueAsString(event);
-            kafkaTemplate.send("payment-events", json);
-        } catch (Exception e) {
-            log.error("Error sending Kafka failure event: {}", e.getMessage());
+        log.warn("❌ Payment FAILED for order: {}", orderId);
+
+        return ApiResponse.builder()
+                .success(false)
+                .message("Payment failed")
+                .data(payment)
+                .build();
+    }
+
+    // 🔍 GET PAYMENT
+    public ApiResponse getPayment(Long orderId) {
+
+        Payment payment = getPaymentEntity(orderId);
+
+        return ApiResponse.builder()
+                .success(true)
+                .message("Payment fetched successfully")
+                .data(payment)
+                .build();
+    }
+
+    // 📜 HISTORY
+    public ApiResponse getAllPayments() {
+
+        return ApiResponse.builder()
+                .success(true)
+                .message("All payments fetched")
+                .data(paymentRepository.findAll())
+                .build();
+    }
+
+    // 💸 REFUND
+    public ApiResponse refund(Long orderId) {
+
+        Payment payment = getPaymentEntity(orderId);
+
+        if (payment.getStatus() != PaymentStatus.SUCCESS) {
+            throw new RuntimeException("Only successful payments can be refunded");
         }
 
-        return new PaymentResponse(
-                payment.getId(),
-                payment.getOrderId(),
-                payment.getAmount(),
-                payment.getStatus().name(),
-                "Payment failed"
-        );
+        payment.setStatus(PaymentStatus.FAILED);
+        paymentRepository.save(payment);
+
+        log.info("💸 Refund processed for order: {}", orderId);
+
+        return ApiResponse.builder()
+                .success(true)
+                .message("Refund initiated successfully")
+                .data(payment)
+                .build();
     }
 
-    // 4️⃣ Get Payment
-    public Payment getPayment(Long orderId) {
-        return paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new RuntimeException("Payment not found"));
-    }
-
-    // 5️⃣ Auto-create payment
+    // 🔁 AUTO CREATE (Inventory → Payment)
     public void autoCreatePayment(Long orderId, Double amount) {
+
+        if (paymentRepository.findByOrderId(orderId).isPresent()) {
+            log.warn("⚠️ Payment already exists for order: {}", orderId);
+            return;
+        }
 
         Payment payment = Payment.builder()
                 .orderId(orderId)
@@ -128,21 +165,28 @@ public class PaymentService {
 
         paymentRepository.save(payment);
 
-        System.out.println("🔥 Auto payment created for order: " + orderId);
+        log.info("🔥 Auto payment created for order: {}", orderId);
     }
-    // refundPayment
-    public String refund(Long orderId) {
 
-        Payment payment = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new RuntimeException("Payment not found"));
+    // 🔥 PRIVATE METHOD
+    private Payment getPaymentEntity(Long orderId) {
+        return paymentRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new RuntimeException("Payment not found for order: " + orderId));
+    }
 
-        if (!payment.getStatus().equals(PaymentStatus.SUCCESS)) {
-            throw new RuntimeException("Only successful payments can be refunded");
+    // 🔥 KAFKA EVENT
+    private void sendKafkaEvent(Long orderId, String status) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("orderId", orderId);
+            event.put("status", status);
+
+            String json = objectMapper.writeValueAsString(event);
+
+            kafkaTemplate.send("payment-events", json);
+
+        } catch (Exception e) {
+            log.error("Kafka error: {}", e.getMessage());
         }
-
-        payment.setStatus(PaymentStatus.FAILED);
-        paymentRepository.save(payment);
-
-        return "Refund initiated";
     }
 }

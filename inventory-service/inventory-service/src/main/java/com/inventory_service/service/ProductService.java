@@ -3,6 +3,7 @@ package com.inventory_service.service;
 import com.inventory_service.dto.CreateProductRequest;
 import com.inventory_service.dto.OrderDto;
 import com.inventory_service.dto.OrderItemDto;
+import com.inventory_service.dto.ProductWithStockDto;
 import com.inventory_service.entity.Category;
 import com.inventory_service.entity.Inventory;
 import com.inventory_service.entity.Product;
@@ -97,6 +98,31 @@ public class ProductService {
     public List<Product> getAll(){
         log.info("Fetching all products");
         return productRepository.findAll();
+    }
+
+    /**
+     * Get all products with stock
+     */
+    public List<ProductWithStockDto> getAllWithStock() {
+        log.info("Fetching all products with stock info");
+        List<Product> products = productRepository.findAll();
+        return products.stream().map(product -> {
+            Inventory inventory = inventoryRepository.findById(product.getId()).orElse(null);
+            int stock = inventory != null ? inventory.getAvailableStock() : 0;
+            String status = stock > 10 ? "in-stock" : (stock > 0 ? "low-stock" : "out-of-stock");
+            List<String> images = product.getImages() != null ? 
+                product.getImages().stream().map(com.inventory_service.entity.ProductImage::getImageUrl).toList() : List.of();
+            return new ProductWithStockDto(
+                product.getId(),
+                product.getName(),
+                product.getDescription(),
+                product.getPrice(),
+                product.getCategory(),
+                stock,
+                status,
+                images
+            );
+        }).toList();
     }
 
     /**

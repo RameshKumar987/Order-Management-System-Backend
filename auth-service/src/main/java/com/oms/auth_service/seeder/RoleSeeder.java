@@ -29,15 +29,15 @@ public class RoleSeeder implements CommandLineRunner {
         }
 
         //create admin user if not exists
-        if (userRepository.findByEmail("admin@oms.com").isEmpty()) {
+        if (userRepository.findByEmail("admin@gmail.com").isEmpty()) {
 
             Role adminRole = roleRepository.findByName(RoleName.ADMIN)
                     .orElseThrow();
 
             User admin = new User();
             admin.setName("System Admin");
-            admin.setEmail("admin@oms.com");
-            admin.setPassword(passwordEncoder.encode("admin123"));
+            admin.setEmail("admin@gmail.com");
+            admin.setPassword(passwordEncoder.encode("123456"));
             admin.setRole(adminRole);
 
             userRepository.save(admin);

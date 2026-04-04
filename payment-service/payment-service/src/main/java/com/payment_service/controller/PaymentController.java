@@ -1,8 +1,7 @@
 package com.payment_service.controller;
 
+import com.payment_service.dto.ApiResponse;
 import com.payment_service.dto.CreatePaymentRequest;
-import com.payment_service.dto.PaymentResponse;
-import com.payment_service.repository.PaymentRepository;
 import com.payment_service.service.PaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,77 +16,55 @@ import org.springframework.web.bind.annotation.*;
 public class PaymentController {
 
     private final PaymentService paymentService;
-    private final PaymentRepository paymentRepository;
 
-    // Create Payment
+    // ✅ CREATE
     @PostMapping("/create")
-    public ResponseEntity<PaymentResponse> create(
+    public ResponseEntity<ApiResponse> create(
             @Valid @RequestBody CreatePaymentRequest request) {
-            //validate request
-            if (request.orderId() == null || request.orderId() <= 0) {
-                log.warn("❌ Invalid Order ID: {}", request.orderId());
-                return ResponseEntity.badRequest().body(null);
-            }
-            if (request.amount() == null || request.amount() <= 0) {
-                log.warn("❌ Invalid Amount: {}", request.amount());
-                return ResponseEntity.badRequest().body(null);
-            }
+
+        log.info("📥 Create payment request: {}", request);
 
         return ResponseEntity.ok(paymentService.createPayment(request));
     }
 
-    // Simulate success
+    // ✅ SUCCESS
     @PostMapping("/success/{orderId}")
-    public ResponseEntity<PaymentResponse> success(@PathVariable Long orderId) {
+    public ResponseEntity<ApiResponse> success(@PathVariable Long orderId) {
 
-        // ✅ Validate payment exists before processing
-        var payment = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> {
-                    log.warn("❌ Payment not found for Order ID: {}", orderId);
-                    return new RuntimeException("Payment not found for Order ID: " + orderId);
-                });
+        log.info("💰 Payment success API hit for order: {}", orderId);
 
-        log.info("✅ Processing payment success for Order ID: {}", orderId);
         return ResponseEntity.ok(paymentService.completePayment(orderId));
     }
 
-    // Simulate failure
+    // ❌ FAIL
     @PostMapping("/fail/{orderId}")
-    public ResponseEntity<PaymentResponse> fail(@PathVariable Long orderId) {
+    public ResponseEntity<ApiResponse> fail(@PathVariable Long orderId) {
 
-        // ✅ Validate payment exists before processing
-        var payment = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> {
-                    log.warn("❌ Payment not found for Order ID: {}", orderId);
-                    return new RuntimeException("Payment not found for Order ID: " + orderId);
-                });
+        log.info("❌ Payment fail API hit for order: {}", orderId);
 
-        log.info("✅ Processing payment failure for Order ID: {}", orderId);
         return ResponseEntity.ok(paymentService.failPayment(orderId));
     }
 
-    // Get payment
+    // 🔍 GET
     @GetMapping("/{orderId}")
-    public ResponseEntity<?> get(@PathVariable Long orderId) {
+    public ResponseEntity<ApiResponse> get(@PathVariable Long orderId) {
+
         return ResponseEntity.ok(paymentService.getPayment(orderId));
     }
 
+    // 📜 HISTORY
     @GetMapping("/history")
-    public ResponseEntity<?> getAllPayments() {
-        return ResponseEntity.ok(paymentRepository.findAll());
+    public ResponseEntity<ApiResponse> getAllPayments() {
+
+        return ResponseEntity.ok(paymentService.getAllPayments());
     }
 
+    // 💸 REFUND
     @PostMapping("/refund/{orderId}")
-    public ResponseEntity<?> refund(@PathVariable Long orderId) {
+    public ResponseEntity<ApiResponse> refund(@PathVariable Long orderId) {
 
-        // ✅ Validate payment exists before processing
-        var payment = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> {
-                    log.warn("❌ Payment not found for Order ID: {}", orderId);
-                    return new RuntimeException("Payment not found for Order ID: " + orderId);
-                });
+        log.info("💸 Refund API hit for order: {}", orderId);
 
-        log.info("✅ Processing refund for Order ID: {}", orderId);
         return ResponseEntity.ok(paymentService.refund(orderId));
     }
 }
