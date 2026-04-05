@@ -40,6 +40,12 @@ public class InventoryEventConsumer {
             }
 
             if ("VALIDATED".equals(status)) {
+                if (order.getStatus() == OrderStatus.CANCELLED) {
+                    log.warn("⚠️ Order {} was already CANCELLED. Ignoring inventory validation.", orderId);
+                    // Stock release was already published by order cancellation.
+                    return;
+                }
+
                 Double totalAmount = ((Number) event.get("totalAmount")).doubleValue();
                 
                 log.info("✅ Order VALIDATED by inventory. Updating prices for Order ID: {}", orderId);

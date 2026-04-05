@@ -38,6 +38,11 @@ public class OrderConsumer {
             Long userId = ((Number) eventData.get("userId")).longValue();
             String status = (String) eventData.get("status");
 
+            if (!"PENDING".equalsIgnoreCase(status)) {
+                log.info("⏩ Ignoring order event with status {}. Only processing PENDING orders for initial stock reservation.", status);
+                return;
+            }
+
             // Convert items from Map to OrderItemDto list
             List<OrderItemDto> items = new ArrayList<>();
             List<Map<String, Object>> itemsData = (List<Map<String, Object>>) eventData.get("items");
