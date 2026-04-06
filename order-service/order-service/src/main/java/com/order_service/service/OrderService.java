@@ -36,6 +36,10 @@ public class OrderService {
         order.setStatus(OrderStatus.PENDING);
         order.setCreatedAt(LocalDateTime.now());
         order.setTotalAmount(0.0);
+        order.setDeliveryAddress(request.deliveryAddress());
+        order.setDeliveryCity(request.deliveryCity());
+        order.setDeliveryLat(request.deliveryLat());
+        order.setDeliveryLng(request.deliveryLng());
 
         if (request.items() == null || request.items().isEmpty()) {
             throw new IllegalArgumentException("Items list cannot be null or empty");
@@ -72,7 +76,11 @@ public class OrderService {
                 savedOrder.getId(),
                 savedOrder.getUserId(),
                 savedOrder.getStatus().name(),
-                itemDtos
+                itemDtos,
+                savedOrder.getDeliveryAddress(),
+                savedOrder.getDeliveryCity(),
+                savedOrder.getDeliveryLat(),
+                savedOrder.getDeliveryLng()
         );
         orderProducer.publishOrderCreated(orderDto);
 
@@ -83,7 +91,11 @@ public class OrderService {
                 savedOrder.getStatus().name(),
                 itemDtos,
                 savedOrder.getTotalAmount(),
-                savedOrder.getCreatedAt()
+                savedOrder.getCreatedAt(),
+                savedOrder.getDeliveryAddress(),
+                savedOrder.getDeliveryCity(),
+                savedOrder.getDeliveryLat(),
+                savedOrder.getDeliveryLng()
         );
     }
 
@@ -134,7 +146,8 @@ public class OrderService {
         List<OrderItemDto> itemDtos = saved.getItems().stream()
                 .map(item -> new OrderItemDto(item.getProductId(), item.getProductName(), item.getQuantity(), item.getPrice()))
                 .toList();
-        OrderDto orderDto = new OrderDto(saved.getId(), saved.getUserId(), saved.getStatus().name(), itemDtos);
+        OrderDto orderDto = new OrderDto(saved.getId(), saved.getUserId(), saved.getStatus().name(), itemDtos,
+                saved.getDeliveryAddress(), saved.getDeliveryCity(), saved.getDeliveryLat(), saved.getDeliveryLng());
         orderProducer.publishOrderCancelled(orderDto);
 
         return "Order cancelled successfully";

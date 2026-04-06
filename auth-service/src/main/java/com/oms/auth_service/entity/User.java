@@ -25,6 +25,7 @@ public class User {
     @Column(unique = true)
     private String email;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String password;
 
     @ManyToOne
@@ -32,11 +33,22 @@ public class User {
     private Role role;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private List<RefreshToken> refreshTokens;
 
     private Boolean isActive = true;
 
     private Boolean emailVerified = false;
+
+    // Address fields
+    private String addressLine;
+    private String city;
+    private String state;
+    private String pincode;
+
+    // Location coordinates
+    private Double latitude;
+    private Double longitude;
 }
 
 

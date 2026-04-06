@@ -65,7 +65,11 @@ public class OrderController {
                             order.getId(),
                             order.getUserId(),
                             order.getStatus().name(),
-                            itemDtos
+                            itemDtos,
+                            order.getDeliveryAddress(),
+                            order.getDeliveryCity(),
+                            order.getDeliveryLat(),
+                            order.getDeliveryLng()
                     );
                 })
                 .toList();
@@ -87,7 +91,11 @@ public class OrderController {
                             order.getId(),
                             order.getUserId(),
                             order.getStatus().name(),
-                            itemDtos
+                            itemDtos,
+                            order.getDeliveryAddress(),
+                            order.getDeliveryCity(),
+                            order.getDeliveryLat(),
+                            order.getDeliveryLng()
                     );
                 })
                 .toList();
@@ -108,7 +116,11 @@ public class OrderController {
                 order.getId(),
                 order.getUserId(),
                 order.getStatus().name(),
-                itemDtos
+                itemDtos,
+                order.getDeliveryAddress(),
+                order.getDeliveryCity(),
+                order.getDeliveryLat(),
+                order.getDeliveryLng()
         );
 
         return ResponseEntity.ok(orderDto);

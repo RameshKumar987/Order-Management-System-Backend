@@ -57,11 +57,16 @@ public class OrderConsumer {
                 }
             }
 
+            String deliveryAddress = (String) eventData.get("deliveryAddress");
+            String deliveryCity = (String) eventData.get("deliveryCity");
+            Double deliveryLat = eventData.get("deliveryLat") != null ? ((Number) eventData.get("deliveryLat")).doubleValue() : null;
+            Double deliveryLng = eventData.get("deliveryLng") != null ? ((Number) eventData.get("deliveryLng")).doubleValue() : null;
+
             log.info("📨 Parsed order event: Order ID = {}, User ID = {}, Status = {}, Items count = {}",
                     orderId, userId, status, items.size());
 
             // Create OrderDto
-            OrderDto order = new OrderDto(orderId, userId, status, items);
+            OrderDto order = new OrderDto(orderId, userId, status, items, deliveryAddress, deliveryCity, deliveryLat, deliveryLng);
 
             // Process order and validate stock
             productService.processOrder(order);

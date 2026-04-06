@@ -6,6 +6,10 @@ public record OrderDto(
         Long id,
         Long userId,
         String status,
-        List<OrderItemDto> items
+        List<OrderItemDto> items,
+        String deliveryAddress,
+        String deliveryCity,
+        Double deliveryLat,
+        Double deliveryLng
 ) {
 }

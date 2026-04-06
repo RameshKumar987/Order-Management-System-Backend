@@ -181,6 +181,12 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("message", "User deleted successfully"));
     }
 
+    @PutMapping("/admin/users/{id}/toggle-active")
+    public ResponseEntity<?> toggleUserActiveStatus(@PathVariable Long id) {
+        authService.toggleUserActiveStatus(id);
+        return ResponseEntity.ok(Map.of("message", "User status toggled successfully"));
+    }
+
     @GetMapping("/users/me")
     public ResponseEntity<User> getCurrentUser(Authentication authentication) {
         return ResponseEntity.ok(
@@ -194,6 +200,14 @@ public class AuthController {
             @RequestBody UpdateProfileRequest request) {
         authService.updateProfile(authentication.getName(), request);
         return ResponseEntity.ok(Map.of("message", "Profile updated"));
+    }
+
+    @PutMapping("/users/me/address")
+    public ResponseEntity<?> updateAddress(
+            Authentication authentication,
+            @Valid @RequestBody UpdateAddressRequest request) {
+        authService.updateAddress(authentication.getName(), request);
+        return ResponseEntity.ok(Map.of("message", "Address updated"));
     }
 
     @PutMapping("/users/change-password")

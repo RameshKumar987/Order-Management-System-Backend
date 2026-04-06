@@ -20,13 +20,13 @@ public class OrderProducer {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public void publishOrderCreated(OrderDto orderDto){
+    public void publishOrderCreated(OrderDto orderDto) {
         publishOrderEvent(orderDto, "order-events");
     }
 
-    public void publishOrderCancelled(OrderDto orderDto){
+    public void publishOrderCancelled(OrderDto orderDto) {
         publishOrderEvent(orderDto, "order-events");
-        
+
         // Also publish to compensation for safety
         try {
             Map<String, Object> compensationEvent = new HashMap<>();
@@ -51,6 +51,10 @@ public class OrderProducer {
             event.put("userId", orderDto.userId());
             event.put("status", orderDto.status());
             event.put("items", orderDto.items());
+            event.put("deliveryAddress", orderDto.deliveryAddress());
+            event.put("deliveryCity", orderDto.deliveryCity());
+            event.put("deliveryLat", orderDto.deliveryLat());
+            event.put("deliveryLng", orderDto.deliveryLng());
 
             String json = objectMapper.writeValueAsString(event);
             kafkaTemplate.send(topic, json);
@@ -63,4 +67,3 @@ public class OrderProducer {
         }
     }
 }
-
