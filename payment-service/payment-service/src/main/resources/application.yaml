@@ -11,9 +11,9 @@ spring:
     name: payment-service
 
   datasource:
-    url: jdbc:mysql://localhost:3306/oms_payment
-    username: root
-    password: rkRK@9877895
+    url: ${DB_URL:jdbc:mysql://localhost:3306/oms_payment}
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:rkRK@9877895}
 
   jpa:
     hibernate:
@@ -21,7 +21,7 @@ spring:
     show-sql: true
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_URL:localhost:9092}
     consumer:
       group-id: payment-group
       auto-offset-reset: earliest
@@ -36,7 +36,9 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    fetch-registry: ${EUREKA_FETCH_REGISTRY:true}
+    register-with-eureka: ${EUREKA_REGISTER:true}
   instance:
     prefer-ip-address: true
     ip-address: 127.0.0.1
