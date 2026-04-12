@@ -110,8 +110,6 @@ public class InventoryService {
 
         inventoryRepository.save(inventory);
         log.info("Stock reserved successfully for order {}", request.orderId());
-
-        producer.sendInventoryReservedEvent(request);
     }
 
     /**

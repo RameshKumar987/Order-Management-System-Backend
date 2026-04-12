@@ -1,0 +1,43 @@
+server:
+  port: 8084
+
+razorpay:
+  key: rzp_test_SWX9xsii8mFhwM
+  secret: O6CxKV8llWTTvEhyW2zWvhOI
+  webhook-secret: YOUR_WEBHOOK_SECRET
+
+spring:
+  application:
+    name: payment-service
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/oms_payment
+    username: root
+    password: rkRK@9877895
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: payment-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+  # Security handled by API Gateway - no oauth2ResourceServer needed here
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    ip-address: 127.0.0.1
+    hostname: localhost

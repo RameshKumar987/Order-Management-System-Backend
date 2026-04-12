@@ -191,6 +191,25 @@ public class AuthService {
         userRepository.save(user);
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    public void updateAddress(String email, UpdateAddressRequest request) {
+        System.out.println("Updating address for user: " + email);
+        System.out.println("Request: " + request);
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setAddressLine(request.addressLine());
+        user.setCity(request.city());
+        user.setState(request.state());
+        user.setPincode(request.pincode());
+        user.setLatitude(request.latitude());
+        user.setLongitude(request.longitude());
+
+        User savedUser = userRepository.save(user);
+        System.out.println("Saved address for user: " + savedUser.getEmail() + " | Address: " + savedUser.getAddressLine());
+    }
+
     // Endpoint to change the current authenticated user's password
     public void changePassword(String email, ChangePasswordRequest request) {
 
@@ -204,6 +223,19 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.newPassword()));
 
         userRepository.save(user);
+    }
+
+    // Method to toggle user active status (Block/Unblock)
+    public User toggleUserActiveStatus(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getRole().getName() == RoleName.ADMIN) {
+            throw new RuntimeException("Admin account status cannot be toggled");
+        }
+
+        user.setIsActive(!user.getIsActive());
+        return userRepository.save(user);
     }
 
     // Method to delete own account

@@ -10,6 +10,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
+import java.io.IOException;
+import java.util.Base64;
+
 @Service
 @RequiredArgsConstructor
 public class ProductImageService {
@@ -35,12 +38,13 @@ public class ProductImageService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
-        // Temporary URL generation example
-        String imageUrl =
-                "https://cdn.fake-storage.com/" +
-                        System.currentTimeMillis() +
-                        "_" +
-                        file.getOriginalFilename();
+        String imageUrl;
+        try {
+            String base64Image = Base64.getEncoder().encodeToString(file.getBytes());
+            imageUrl = "data:" + file.getContentType() + ";base64," + base64Image;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to process image file", e);
+        }
 
         ProductImage image = new ProductImage();
 

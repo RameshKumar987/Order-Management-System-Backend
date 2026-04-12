@@ -27,6 +27,16 @@ spring:
               predicates:
                 - Path=/inventory/**
 
+            - id: order-service
+              uri: lb://order-service
+              predicates:
+                - Path=/orders/**
+
+            - id: payment-service
+              uri: lb://payment-service
+              predicates:
+                - Path=/payments/**
+
 
 eureka:
   client:
@@ -39,9 +49,3 @@ eureka:
 
 jwt:
   secret: 1234567890123456789012345678901234567890
-
-logging:
-  level:
-    org.springframework.cloud.gateway: INFO
-    com.api_gateway: DEBUG
-

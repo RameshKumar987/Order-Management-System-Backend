@@ -30,6 +30,7 @@ public class OAuth2TokenService {
         Map<String, Object> claims = new HashMap<>(additionalClaims);
         claims.put("role", user.getRole().getName().name());
         claims.put("scopes", getScopesForRole(user.getRole()));
+        claims.put("userId", user.getId());
 
         return Jwts.builder()
                 .setClaims(claims)
@@ -103,4 +104,3 @@ public class OAuth2TokenService {
         };
     }
 }
-
