@@ -33,4 +33,10 @@ public class Order {
     @OneToMany(mappedBy="order", cascade=CascadeType.ALL)
     @JsonIgnore
     private List<OrderItem> items;
+
+    // Delivery Address fields
+    private String deliveryAddress;
+    private String deliveryCity;
+    private Double deliveryLat;
+    private Double deliveryLng;
 }

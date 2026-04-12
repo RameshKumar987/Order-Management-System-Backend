@@ -18,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +36,10 @@ public class OrderService {
         order.setStatus(OrderStatus.PENDING);
         order.setCreatedAt(LocalDateTime.now());
         order.setTotalAmount(0.0);
+        order.setDeliveryAddress(request.deliveryAddress());
+        order.setDeliveryCity(request.deliveryCity());
+        order.setDeliveryLat(request.deliveryLat());
+        order.setDeliveryLng(request.deliveryLng());
 
         if (request.items() == null || request.items().isEmpty()) {
             throw new IllegalArgumentException("Items list cannot be null or empty");
@@ -52,6 +55,7 @@ public class OrderService {
         List<OrderItem> items = request.items().stream()
                 .map(i -> OrderItem.builder()
                         .productId(i.productId())
+                        .productName(i.productName())
                         .quantity(i.quantity())
                         .price(0.0)
                         .order(order)
@@ -66,13 +70,17 @@ public class OrderService {
 
         // Publish order event for inventory validation
         List<OrderItemDto> itemDtos = savedOrder.getItems().stream()
-                .map(item -> new OrderItemDto(item.getProductId(), item.getQuantity(), item.getPrice()))
+                .map(item -> new OrderItemDto(item.getProductId(), item.getProductName(), item.getQuantity(), item.getPrice()))
                 .toList();
         OrderDto orderDto = new OrderDto(
                 savedOrder.getId(),
                 savedOrder.getUserId(),
                 savedOrder.getStatus().name(),
-                itemDtos
+                itemDtos,
+                savedOrder.getDeliveryAddress(),
+                savedOrder.getDeliveryCity(),
+                savedOrder.getDeliveryLat(),
+                savedOrder.getDeliveryLng()
         );
         orderProducer.publishOrderCreated(orderDto);
 
@@ -83,59 +91,32 @@ public class OrderService {
                 savedOrder.getStatus().name(),
                 itemDtos,
                 savedOrder.getTotalAmount(),
-                savedOrder.getCreatedAt()
+                savedOrder.getCreatedAt(),
+                savedOrder.getDeliveryAddress(),
+                savedOrder.getDeliveryCity(),
+                savedOrder.getDeliveryLat(),
+                savedOrder.getDeliveryLng()
         );
     }
 
     @Transactional
-    public void updateOrderFromValidation(Map<String, Object> validationResult) {
+    public void confirmOrder(Long orderId) {
         try {
-            Long orderId = ((Number) validationResult.get("orderId")).longValue();
             Order order = getOrderById(orderId);
 
-            String status = (String) validationResult.get("status");
-
-            if ("VALIDATED".equals(status)) {
-                // ✅ Validation successful: Order is approved
-                Double totalAmount = (Double) validationResult.get("totalAmount");
-                if (totalAmount == null || totalAmount < 0) {
-                    throw new IllegalArgumentException("Invalid total amount from validation: " + totalAmount);
-                }
-                order.setTotalAmount(totalAmount);
-                order.setStatus(OrderStatus.CONFIRMED);
-
-                // Update item prices with calculated total
-                if (order.getItems() != null && !order.getItems().isEmpty()) {
-                    double pricePerItem = totalAmount / order.getItems().size();
-                    order.getItems().forEach(item -> item.setPrice(pricePerItem));
-                    log.info("✅ Item prices updated for Order ID: {}, Price per item: {}", orderId, pricePerItem);
-                }
-
-                orderRepository.save(order);
-                saveHistory(order);
-                log.info("✅ Order confirmed and saved: Order ID = {}, Total Amount = {}", orderId, totalAmount);
-
-            } else if ("FAILED".equals(status)) {
-                // ❌ Validation failed: Order is rejected
-                String errorMsg = (String) validationResult.get("error");
-                order.setStatus(OrderStatus.FAILED);
-
-                orderRepository.save(order);
-                saveHistory(order);
-
-                log.warn("⚠️  Order validation FAILED for Order ID: {}, Reason: {}", orderId, errorMsg);
-                log.warn("⚠️  Order status updated to FAILED: Order ID = {}", orderId);
-
-            } else {
-                log.error("❌ Unknown validation status: {}", status);
-                throw new IllegalArgumentException("Unknown validation status: " + status);
+            if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.PAYMENT_PENDING) {
+                log.warn("⚠️  Cannot confirm order with status: {}", order.getStatus());
+                return;
             }
-        } catch (ClassCastException | NullPointerException e) {
-            log.error("❌ Type conversion error in validation result", e);
-            throw new RuntimeException("Invalid validation result format: " + e.getMessage(), e);
+
+            order.setStatus(OrderStatus.CONFIRMED);
+            orderRepository.save(order);
+            saveHistory(order);
+
+            log.info("✅ Order confirmed successfully: Order ID = {}", orderId);
         } catch (Exception e) {
-            log.error("❌ Error updating order from validation: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to update order from validation: " + e.getMessage(), e);
+            log.error("❌ Error confirming order: {}", e.getMessage());
+            throw new RuntimeException("Failed to confirm order: " + e.getMessage());
         }
     }
 
@@ -157,9 +138,17 @@ public class OrderService {
         }
 
         order.setStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
+        Order saved = orderRepository.save(order);
 
-        saveHistory(order);
+        saveHistory(saved);
+
+        // Notify inventory to release stock
+        List<OrderItemDto> itemDtos = saved.getItems().stream()
+                .map(item -> new OrderItemDto(item.getProductId(), item.getProductName(), item.getQuantity(), item.getPrice()))
+                .toList();
+        OrderDto orderDto = new OrderDto(saved.getId(), saved.getUserId(), saved.getStatus().name(), itemDtos,
+                saved.getDeliveryAddress(), saved.getDeliveryCity(), saved.getDeliveryLat(), saved.getDeliveryLng());
+        orderProducer.publishOrderCancelled(orderDto);
 
         return "Order cancelled successfully";
     }

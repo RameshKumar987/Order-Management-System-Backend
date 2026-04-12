@@ -9,7 +9,11 @@ public record OrderResponse(
         String status,
         List<OrderItemDto> items,
         Double totalAmount,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        String deliveryAddress,
+        String deliveryCity,
+        Double deliveryLat,
+        Double deliveryLng
 ) {}
 
 

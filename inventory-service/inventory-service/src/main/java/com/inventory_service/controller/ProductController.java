@@ -2,6 +2,7 @@ package com.inventory_service.controller;
 
 import com.inventory_service.dto.ApiResponse;
 import com.inventory_service.dto.CreateProductRequest;
+import com.inventory_service.dto.ProductWithStockDto;
 import com.inventory_service.entity.Product;
 import com.inventory_service.exception.ResourceNotFoundException;
 import com.inventory_service.exception.ValidationException;
@@ -38,6 +39,14 @@ public class ProductController {
     @GetMapping
     public List<Product> getAll(){
         return service.getAll();
+    }
+
+    /**
+     * Get all products with stock
+     */
+    @GetMapping("/with-stock")
+    public List<ProductWithStockDto> getAllWithStock(){
+        return service.getAllWithStock();
     }
 
     /**

@@ -24,16 +24,9 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      properties:
-        spring.json.add.type.headers: true
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: http://localhost:8081
-          jwk-set-uri: http://localhost:8081/.well-known/jwks.json
+  # Security handled by API Gateway - no oauth2ResourceServer needed here
 
 jwt:
   secret: 1234567890123456789012345678901234567890

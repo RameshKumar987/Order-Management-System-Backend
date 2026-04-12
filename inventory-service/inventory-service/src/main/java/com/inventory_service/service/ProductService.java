@@ -3,6 +3,7 @@ package com.inventory_service.service;
 import com.inventory_service.dto.CreateProductRequest;
 import com.inventory_service.dto.OrderDto;
 import com.inventory_service.dto.OrderItemDto;
+import com.inventory_service.dto.ProductWithStockDto;
 import com.inventory_service.entity.Category;
 import com.inventory_service.entity.Inventory;
 import com.inventory_service.entity.Product;
@@ -15,9 +16,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.kafka.core.KafkaTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
+import java.util.HashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +32,7 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final InventoryRepository inventoryRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * Validate product ID
@@ -94,6 +99,31 @@ public class ProductService {
     public List<Product> getAll(){
         log.info("Fetching all products");
         return productRepository.findAll();
+    }
+
+    /**
+     * Get all products with stock
+     */
+    public List<ProductWithStockDto> getAllWithStock() {
+        log.info("Fetching all products with stock info");
+        List<Product> products = productRepository.findAll();
+        return products.stream().map(product -> {
+            Inventory inventory = inventoryRepository.findById(product.getId()).orElse(null);
+            int stock = inventory != null ? inventory.getAvailableStock() : 0;
+            String status = stock > 10 ? "in-stock" : (stock > 0 ? "low-stock" : "out-of-stock");
+            List<String> images = product.getImages() != null ? 
+                product.getImages().stream().map(com.inventory_service.entity.ProductImage::getImageUrl).toList() : List.of();
+            return new ProductWithStockDto(
+                product.getId(),
+                product.getName(),
+                product.getDescription(),
+                product.getPrice(),
+                product.getCategory(),
+                stock,
+                status,
+                images
+            );
+        }).toList();
     }
 
     /**
@@ -173,7 +203,7 @@ public class ProductService {
                 if (!productRepository.existsById(item.productId())) {
                     String errorMsg = String.format("Product not found with ID: %d", item.productId());
                     log.warn("⚠️  {}", errorMsg);
-                    publishValidationFailure(order.id(), errorMsg);
+                    publishValidationFailure(order.id(), order.userId(), errorMsg);
                     return;
                 }
             }
@@ -186,7 +216,7 @@ public class ProductService {
                 if (inventory == null) {
                     String errorMsg = String.format("Inventory not found for product ID: %d", item.productId());
                     log.warn("⚠️  {}", errorMsg);
-                    publishValidationFailure(order.id(), errorMsg);
+                    publishValidationFailure(order.id(), order.userId(), errorMsg);
                     return;
                 }
 
@@ -195,24 +225,34 @@ public class ProductService {
                         "Insufficient stock for product %d. Available: %d, Requested: %d",
                         item.productId(), inventory.getAvailableStock(), item.quantity());
                     log.warn("⚠️  {}", errorMsg);
-                    publishValidationFailure(order.id(), errorMsg);
+                    publishValidationFailure(order.id(), order.userId(), errorMsg);
                     return;
                 }
             }
 
-            // 3. Calculate total amount
-            double totalAmount = order.items().stream()
-                    .mapToDouble(item -> {
-                        Product product = productRepository.findById(item.productId()).orElse(null);
-                        if (product == null) {
-                            throw new RuntimeException("Product not found: " + item.productId());
-                        }
-                        double itemTotal = product.getPrice() * item.quantity();
-                        log.debug("Item: Product ID = {}, Quantity = {}, Price = {}, Total = {}",
-                                item.productId(), item.quantity(), product.getPrice(), itemTotal);
-                        return itemTotal;
-                    })
-                    .sum();
+            // 3. Calculate total amount and collect item prices
+            List<Map<String, Object>> validatedItems = new ArrayList<>();
+            double totalAmount = 0.0;
+            
+            for (OrderItemDto item : order.items()) {
+                Product product = productRepository.findById(item.productId()).orElse(null);
+                if (product == null) {
+                    throw new RuntimeException("Product not found: " + item.productId());
+                }
+                
+                double itemPrice = product.getPrice();
+                double itemTotal = itemPrice * item.quantity();
+                totalAmount += itemTotal;
+                
+                Map<String, Object> itemData = new HashMap<>();
+                itemData.put("productId", item.productId());
+                itemData.put("quantity", item.quantity());
+                itemData.put("price", itemPrice);
+                validatedItems.add(itemData);
+                
+                log.debug("Item: Product ID = {}, Quantity = {}, Price = {}, Total = {}",
+                        item.productId(), item.quantity(), itemPrice, itemTotal);
+            }
 
             log.info("✅ Order validation complete: Order ID = {}, Total Amount = {}", order.id(), totalAmount);
 
@@ -227,34 +267,47 @@ public class ProductService {
             }
 
             // 5. Publish validation success result
-            publishValidationSuccess(order.id(), totalAmount);
+            publishValidationSuccess(order.id(), order.userId(), totalAmount, validatedItems);
             log.info("✅ Order validated successfully: Order ID = {}", order.id());
 
         } catch (Exception e) {
             String errorMsg = "Order processing failed: " + e.getMessage();
             log.error("❌ {}", errorMsg);
-            publishValidationFailure(order.id(), errorMsg);
+            publishValidationFailure(order.id(), order.userId(), errorMsg);
         }
     }
 
-    private void publishValidationSuccess(Long orderId, Double totalAmount) {
-        Map<String, Object> validationResult = Map.of(
-                "orderId", orderId,
-                "totalAmount", totalAmount,
-                "status", "VALIDATED"
-        );
-        kafkaTemplate.send("order-validation-topic", validationResult);
-        log.info("✅ Validation success published for Order ID: {}", orderId);
+    private void publishValidationSuccess(Long orderId, Long userId, Double totalAmount, List<Map<String, Object>> items) {
+        try {
+            Map<String, Object> validationResult = new HashMap<>();
+            validationResult.put("orderId", orderId);
+            validationResult.put("userId", userId);
+            validationResult.put("totalAmount", totalAmount);
+            validationResult.put("items", items);
+            validationResult.put("status", "VALIDATED");
+
+            String json = objectMapper.writeValueAsString(validationResult);
+            kafkaTemplate.send("inventory-events", json);
+            log.info("✅ Validation success published for Order ID: {}, User ID: {}", orderId, userId);
+        } catch (Exception e) {
+            log.error("❌ Error publishing validation success: {}", e.getMessage());
+        }
     }
 
-    private void publishValidationFailure(Long orderId, String errorMessage) {
-        Map<String, Object> failureResult = Map.of(
-                "orderId", orderId,
-                "totalAmount", 0.0,
-                "status", "FAILED",
-                "error", errorMessage
-        );
-        kafkaTemplate.send("order-validation-topic", failureResult);
-        log.warn("⚠️  Validation failure published for Order ID: {}, Error: {}", orderId, errorMessage);
+    private void publishValidationFailure(Long orderId, Long userId, String errorMessage) {
+        try {
+            Map<String, Object> failureResult = new HashMap<>();
+            failureResult.put("orderId", orderId);
+            failureResult.put("userId", userId);
+            failureResult.put("totalAmount", 0.0);
+            failureResult.put("status", "FAILED");
+            failureResult.put("error", errorMessage);
+
+            String json = objectMapper.writeValueAsString(failureResult);
+            kafkaTemplate.send("inventory-events", json);
+            log.warn("⚠️  Validation failure published for Order ID: {}, User ID: {}, Error: {}", orderId, userId, errorMessage);
+        } catch (Exception e) {
+            log.error("❌ Error publishing validation failure: {}", e.getMessage());
+        }
     }
 }
