@@ -11,9 +11,9 @@ spring:
     exclude: org.springframework.boot.autoconfigure.security.oauth2.server.servlet.OAuth2AuthorizationServerAutoConfiguration
 
   datasource:
-    url: jdbc:mysql://localhost:3306/oms_auth
-    username: root
-    password: rkRK@9877895
+    url: ${DB_URL:jdbc:mysql://localhost:3306/oms_auth}
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:rkRK@9877895}
 
   jpa:
     hibernate:
@@ -40,7 +40,9 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    fetch-registry: ${EUREKA_FETCH_REGISTRY:true}
+    register-with-eureka: ${EUREKA_REGISTER:true}
   instance:
     prefer-ip-address: true
 

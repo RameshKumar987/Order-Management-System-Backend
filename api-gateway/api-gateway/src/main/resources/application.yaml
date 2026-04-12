@@ -9,8 +9,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8081
-          jwk-set-uri: http://localhost:8081/.well-known/jwks.json
+          issuer-uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          jwk-set-uri: ${AUTH_SERVICE_URL:http://localhost:8081}/.well-known/jwks.json
 
   cloud:
     gateway:
@@ -18,22 +18,22 @@ spring:
         webflux:
           routes:
             - id: auth-service
-              uri: lb://auth-service
+              uri: ${AUTH_SERVICE_URI:lb://auth-service}
               predicates:
                 - Path=/auth/**
 
             - id: inventory-service
-              uri: lb://inventory-service
+              uri: ${INVENTORY_SERVICE_URI:lb://inventory-service}
               predicates:
                 - Path=/inventory/**
 
             - id: order-service
-              uri: lb://order-service
+              uri: ${ORDER_SERVICE_URI:lb://order-service}
               predicates:
                 - Path=/orders/**
 
             - id: payment-service
-              uri: lb://payment-service
+              uri: ${PAYMENT_SERVICE_URI:lb://payment-service}
               predicates:
                 - Path=/payments/**
 
@@ -41,7 +41,9 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    fetch-registry: ${EUREKA_FETCH_REGISTRY:true}
+    register-with-eureka: ${EUREKA_REGISTER:true}
   instance:
     prefer-ip-address: true
     ip-address: 127.0.0.1
