@@ -1,0 +1,26 @@
+name: Keep Render Services Alive
+
+on:
+  schedule:
+    # Runs every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Auth Service
+        run: curl -s https://auth-service-ykc2.onrender.com || true
+
+      - name: Ping Inventory Service
+        run: curl -s https://inventory-service-dei8.onrender.com || true
+
+      - name: Ping Order Service
+        run: curl -s https://order-service-j7my.onrender.com || true
+
+      - name: Ping Payment Service
+        run: curl -s https://payment-service-pqf1.onrender.com || true
+
+      - name: Ping API Gateway
+        run: curl -s https://api-gateway-dlls.onrender.com || true
